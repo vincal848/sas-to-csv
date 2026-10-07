@@ -1,6 +1,6 @@
 # SAS to CSV
 
-[![tests](https://github.com/vincal848/SAS_to_CSV/actions/workflows/tests.yml/badge.svg)](https://github.com/vincal848/SAS_to_CSV/actions/workflows/tests.yml)
+[![tests](https://github.com/vincal848/sas-to-csv/actions/workflows/tests.yml/badge.svg)](https://github.com/vincal848/sas-to-csv/actions/workflows/tests.yml)
 
 This project came out of needing to turn whitespace SAS text exports (CRSP, USAR,
 USRR dumps where a row can come in short or long depending on what SAS decided to
