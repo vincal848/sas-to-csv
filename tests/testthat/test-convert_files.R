@@ -88,3 +88,23 @@ test_that("padded and truncated row counts are summed across files", {
   expect_equal(result$n_padded, 1)
   expect_equal(result$n_truncated, 1)
 })
+
+test_that("each batch is written before the next one is read", {
+  dir <- withr::local_tempdir()
+  for (i in 1:3) write_fixture(dir, sprintf("crsp_%d.txt", i), sprintf("%d %d", i, i))
+  out <- file.path(dir, "out.csv")
+
+  env <- environment(convert_files)
+  real <- get(".read_one_file", envir = env)
+  sizes <- numeric(0)
+  assign(".read_one_file", function(...) {
+    sizes <<- c(sizes, if (file.exists(out)) file.size(out) else 0)
+    real(...)
+  }, envir = env)
+  withr::defer(assign(".read_one_file", real, envir = env))
+
+  convert_files(dir = dir, pattern = "^crsp_.*\\.txt$", col_names = c("id", "val"), out = out)
+
+  expect_equal(sizes[1], 0)
+  expect_true(all(diff(sizes) > 0)) # output grew before every later read
+})

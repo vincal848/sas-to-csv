@@ -24,7 +24,7 @@ turned out to scale worse than I expected on one machine, which is in
 | **Methods** | Per-line field counting, padded/truncated to a declared column schema; optional `.sas7bdat` input via `haven::read_sas`; chunked `data.table::fwrite` output; PSOCK cluster for `cores > 1` |
 | **Inputs** | Whitespace-delimited SAS text exports (a directory + filename regex) or `.sas7bdat` files, plus a column-name vector |
 | **Outputs** | One CSV, written incrementally per file; a summary of files/rows read and rows padded/truncated |
-| **Validation** | 34 tests: pad/truncate counts, column naming, multi-file order with a source-file column, serial vs. 2-core parallel equality, CSV round-trip, clear error on no matches, `.sas7bdat` column coercion |
+| **Validation** | 12 tests (36 expectations): pad/truncate counts, column naming, multi-file order with a source-file column, serial vs. 2-core parallel equality, CSV round-trip, clear error on no matches, `.sas7bdat` column coercion |
 | **Headline result** | Parallel speedup plateaus fast: 1.53x at 2 workers, 2.58x at 19, on 800k rows across 40 files |
 | **Stack** | R, data.table, parallel, haven, testthat |
 
@@ -103,7 +103,7 @@ Rscript bench.R 40 20000
 | `R/convert.R` | `read_irregular()`, `convert_files()`, `.read_one_file()` |
 | `convert_cli.R` | Command-line wrapper around `convert_files()` |
 | `bench.R` | Generates synthetic CRSP-like files and times serial vs. parallel `convert_files()` |
-| `tests/testthat/` | 34 tests: padding, truncation, column naming, file ordering, serial/parallel equality, CSV round-trip, errors, `.sas7bdat` |
+| `tests/testthat/` | 12 tests (36 expectations): padding, truncation, column naming, file ordering, serial/parallel equality, CSV round-trip, errors, `.sas7bdat` |
 | `legacy/simple_conversion.R` | Original script, kept for reference |
 | `DESCRIPTION` | Dependency declarations for CI (`r-lib/actions/setup-r-dependencies`) |
 
