@@ -104,10 +104,10 @@ read_irregular <- function(path, col_names, sep = NULL, skip = 0,
 #'
 #' Files are read in the order \code{list.files} returns them (alphabetical,
 #' stable across serial and parallel runs since \code{parLapply} preserves
-#' input order) and written to \code{out} one file at a time via
-#' \code{data.table::fwrite(..., append = TRUE)}, so the whole set is never
-#' held in memory as one \code{rbind}ed data.frame the way the legacy script
-#' did.
+#' input order) and written to \code{out} in batches of \code{cores} files (one file at a time
+#' when serial) via \code{data.table::fwrite(..., append = TRUE)}, so the
+#' whole set is never held in memory as one \code{rbind}ed data.frame the way
+#' the legacy script did. \code{return_data = TRUE} opts back in to holding it.
 #'
 #' @param dir Directory to search.
 #' @param pattern Regex passed to \code{list.files}.
@@ -136,6 +136,7 @@ convert_files <- function(dir, pattern, col_names, out, cores = 1,
   }
 
   cores <- max(1, cores)
+  read_batch <- lapply
   if (cores > 1) {
     cl <- parallel::makeCluster(cores) # PSOCK by default, works on Windows
     on.exit(parallel::stopCluster(cl), add = TRUE)
@@ -144,20 +145,30 @@ convert_files <- function(dir, pattern, col_names, out, cores = 1,
     # passed as an ordinary argument below, not captured from an enclosing
     # frame.
     parallel::clusterExport(cl, "read_irregular", envir = environment(convert_files))
-    chunks <- parallel::parLapply(
-      cl, files, .read_one_file,
-      col_names = col_names, sep = sep, skip = skip, na = na, source_col = source_col
-    )
-  } else {
-    chunks <- lapply(
-      files, .read_one_file,
-      col_names = col_names, sep = sep, skip = skip, na = na, source_col = source_col
-    )
+    read_batch <- function(X, FUN, ...) parallel::parLapply(cl, X, FUN, ...)
   }
 
-  n_padded <- sum(vapply(chunks, function(d) attr(d, "n_padded"), numeric(1)))
-  n_truncated <- sum(vapply(chunks, function(d) attr(d, "n_truncated"), numeric(1)))
-  n_rows <- sum(vapply(chunks, nrow, numeric(1)))
+  if (!is.null(out) && file.exists(out) && !append) file.remove(out)
+
+  n_padded <- 0
+  n_truncated <- 0
+  n_rows <- 0
+  kept <- list()
+  # Read `cores` files at a time and write them before reading the next
+  # batch, so at most `cores` chunks are ever in memory.
+  for (batch in split(files, ceiling(seq_along(files) / cores))) {
+    chunks <- read_batch(
+      batch, .read_one_file,
+      col_names = col_names, sep = sep, skip = skip, na = na, source_col = source_col
+    )
+    for (chunk in chunks) {
+      n_padded <- n_padded + attr(chunk, "n_padded")
+      n_truncated <- n_truncated + attr(chunk, "n_truncated")
+      n_rows <- n_rows + nrow(chunk)
+      if (!is.null(out)) data.table::fwrite(chunk, out, append = file.exists(out))
+    }
+    if (isTRUE(return_data)) kept <- c(kept, chunks)
+  }
 
   if (n_padded > 0 || n_truncated > 0) {
     message(sprintf(
@@ -166,20 +177,13 @@ convert_files <- function(dir, pattern, col_names, out, cores = 1,
     ))
   }
 
-  if (!is.null(out)) {
-    if (file.exists(out) && !append) file.remove(out)
-    for (chunk in chunks) {
-      data.table::fwrite(chunk, out, append = file.exists(out))
-    }
-  }
-
   result <- list(
     files = files, n_files = length(files), n_rows = n_rows,
     n_padded = n_padded, n_truncated = n_truncated, out = out
   )
 
   if (isTRUE(return_data)) {
-    combined <- do.call(rbind, chunks)
+    combined <- do.call(rbind, kept)
     rownames(combined) <- NULL
     result$data <- combined
   }
